@@ -2,7 +2,7 @@
 // @name         HaxBall TC Nerds script
 // @namespace    http://tampermonkey.net/
 // @version      0.1
-// @description  HaxBall script only for real nerds
+// @description  try to take over the world!
 // @author       MaddoHatto
 // @source       https://github.com/MaddoHatto/HaxBall-TC-Nerds-Script
 // @match        https://www.haxball.com/headless
