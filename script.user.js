@@ -8,7 +8,7 @@
 // @match        https://www.haxball.com/headless
 // @require      https://code.jquery.com/jquery-1.12.4.min.js
 // @grant        none
-// @license      none
+// @license       GPL-3.0-or-later; https://www.gnu.org/licenses/gpl-3.0.txt
 // ==/UserScript==
 
 const RED_TEAM_ID = 1;
