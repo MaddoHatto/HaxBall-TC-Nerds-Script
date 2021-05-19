@@ -7,7 +7,6 @@
 // @source       https://github.com/MaddoHatto/HaxBall-TC-Nerds-Script
 // @match        https://www.haxball.com/headless
 // @require      https://code.jquery.com/jquery-1.12.4.min.js
-// @icon         https://www.google.com/s2/favicons?domain=haxball.com
 // @grant        none
 // ==/UserScript==
 
