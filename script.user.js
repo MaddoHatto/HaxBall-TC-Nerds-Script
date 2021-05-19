@@ -8,6 +8,7 @@
 // @match        https://www.haxball.com/headless
 // @require      https://code.jquery.com/jquery-1.12.4.min.js
 // @grant        none
+// @license      none
 // ==/UserScript==
 
 const RED_TEAM_ID = 1;
