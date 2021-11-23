@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HaxBall TC Nerds script
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.3
 // @description  try to take over the world!
 // @author       MaddoHatto
 // @source       https://github.com/MaddoHatto/HaxBall-TC-Nerds-Script
@@ -13,7 +13,7 @@
 
 const RED_TEAM_ID = 1;
 const BLUE_TEAM_ID = 2;
-const BACKEND_BASE_URL = 'http://hax.opac.pl/';
+const BACKEND_BASE_URL = 'https://hax.opac.pl/';
 
 const BALL_RADIUS = 10;
 const PLAYER_RADIUS = 15;
@@ -21,14 +21,18 @@ const PLAYER_RADIUS = 15;
 const DISC_BALL_ID = 0;
 const OFFSIDE_AVATAR = '🔥';
 
+const SAVE_REPLAY_BUTTON_ID = 'SAVE_REPLAY_BUTTON_ID';
+const HOST_HANDICAP = '40';
+
 const playersAvatars = {
     MaddoHatto: '🐻',
     "Nelson Mandela": 'xD',
     Amman: '🐺',
     ToPP: '🤡',
-    hubigz: '2',
+    hubigz: 'H',
     adamaru: '😈',
-    rybak: '🧟‍♂️'
+    rybak: '🧟‍♂️',
+    panda: '🐼'
 }
 
 class HaxBallController {
@@ -59,6 +63,8 @@ class HaxBallController {
             [BLUE_TEAM_ID]: 0,
         }
         this.client = new Client();
+        this.gamePageController = null;
+        this.matchResult = null;
     }
 
     initRoom() {
@@ -91,6 +97,34 @@ class HaxBallController {
         this.room.onGamePause = this.onGamePause.bind(this);
         this.room.onGameUnpause = this.onGameUnpause.bind(this);
         this.room.onPositionsReset = this.onPositionsReset.bind(this);
+
+        return this;
+    }
+
+    initUserInterface() {
+        try {
+            document.body.style.background = '#939e7f url("https://www.haxball.com/hiF05fAx/__cache_static__/g/images/bg.png") fixed';
+            this.waitForRoomLinkElement(() => {
+                let button = document.createElement("button");
+                button.innerHTML = "PLAY";
+                button.onclick = this.goToGameTab.bind(this);
+                button.style.color = '#fff';
+                button.style.height = '100px';
+                button.style.width = '450px';
+                button.style.position = 'fixed';
+                button.style.top = '150px';
+                button.style.left = '10px';
+                button.style.fontSize = '36px';
+                button.style.background = 'linear-gradient(#8da86b, #658d59)';
+                button.style.border = '4px solid white';
+                button.style.borderRadius = '50px';
+                button.style.cursor = 'pointer';
+
+                button = document.body.appendChild(button);
+            });
+        } catch (error) {
+            console.log(error);
+        }
 
         return this;
     }
@@ -130,8 +164,9 @@ class HaxBallController {
         this.updateInitPlayerPositions();
     }
 
-    onPlayerJoin() {
+    onPlayerJoin(player) {
         this.updateAdmins();
+        this.resetPlayerAvatar(player);
     }
 
     onPlayerLeave() {
@@ -146,10 +181,25 @@ class HaxBallController {
     onTeamVictory(scores) {
         this.updateGameEndTimestamp();
 
-        const matchResult = this.getMatchResult(scores);
-        console.log('MATCH RESULT = ', matchResult);
+        this.matchResult = this.getMatchResult(scores);
+        console.log('MATCH RESULT = ', this.matchResult);
 
-        //this.client.postMatchResult(matchResult, this.handlePostMatchResult.bind(this));
+        try {
+            if (this.gamePageController) {
+                setTimeout(() => {
+                    //const shouldSave = this.gamePageController.showConfirmModal('Save replay?');
+
+                    //if (shouldSave) {
+                    //    this.saveMatchResult();
+                    //}
+                }, 5000);
+            }
+
+            this.addSaveReplayButton();
+
+        } catch(error) {
+            console.log(error);
+        }
         this.clear();
     }
 
@@ -182,6 +232,7 @@ class HaxBallController {
             startTimestamp: this.gameStartTimestamp,
             endTimestamp: this.gameEndTimestamp,
             duration: scores.time,
+            rawPositionsAtEnd: this.getRawPositionsAtEnd()
         };
     }
 
@@ -236,12 +287,31 @@ class HaxBallController {
         return teamId === RED_TEAM_ID ? BLUE_TEAM_ID : RED_TEAM_ID;
     }
 
+    getRawPositionsAtEnd() {
+        let result = '';
+        const players = this.getPlayers();
+
+        for (let i = 0; i < players.length; i++) {
+            const player = players[i];
+
+            if (player) {
+                const { x, y } = player.position;
+                result = `${result}${x}--${y}|`;
+            }
+        }
+
+        return result;
+    }
+
     updateAdmins() {
         const players = this.room.getPlayerList();
         if ( players.length == 0 ) return; // No players left, do nothing.
         if ( players.find((player) => player.admin) != null ) return; // There's an admin left so do nothing.
         this.room.setPlayerAdmin(players[0].id, true); // Give admin to the first non admin player in the list
-        this.room.startRecording();
+
+        setTimeout(() => {
+            this.setHostHandicap();
+        }, 3000);
     }
 
     updateGameStartTimestamp() {
@@ -273,7 +343,7 @@ class HaxBallController {
     }
 
     updateInitPlayerPositions() {
-        const players = this.room.getPlayerList();
+        const players = this.getPlayers();
 
         for (let i = 0; i < players.length; i++) {
             const player = players[i];
@@ -283,7 +353,7 @@ class HaxBallController {
     }
 
     updateTouchingTheBall() {
-        const players = this.room.getPlayerList();
+        const players = this.getPlayers();
         const ballPosition = this.room.getBallPosition();
         const ballRadius = 10;
         const playerRadius = 15;
@@ -324,7 +394,7 @@ class HaxBallController {
             return;
         }
 
-        const playerList = this.room.getPlayerList();
+        const playerList = this.getPlayers();
         const ballPosition = this.room.getBallPosition();
         const ballOffset = kickerTeamId === RED_TEAM_ID ? BALL_RADIUS : -BALL_RADIUS;
         const playerOffset = kickerTeamId === RED_TEAM_ID ? PLAYER_RADIUS : -PLAYER_RADIUS;
@@ -384,7 +454,7 @@ class HaxBallController {
     }
 
     updateScorers(teamId) {
-        const players = this.room.getPlayerList();
+        const players = this.getPlayers();
         let scorerId = null;
         let scorerName = 'Unknown';
         let closestTimestamp = null;
@@ -416,7 +486,7 @@ class HaxBallController {
         this.room.pauseGame(true);
         this.room.sendAnnouncement(this.getTeamName(player.team) + ' team offside', null, 0xFFFFFF, "bold", 2);
 
-        const players = this.room.getPlayerList();
+        const players = this.getPlayers();
         const offsideTeamId = player.team;
         const enemyTeamId = this.getEnemyTeamId(offsideTeamId);
 
@@ -508,7 +578,7 @@ class HaxBallController {
         const commands = ['p', 'pp', 'ppp', 'pauza'];
         const trimmedMessage = message.trim();
 
-        return commands.indexOf(trimmedMessage) !== -1;
+        return commands.indexOf(trimmedMessage) !== -1 && !this.isPaused;
     }
 
     isFindTeamsCommand(message) {
@@ -574,8 +644,7 @@ class HaxBallController {
             const player = this.room.getPlayer(playerId);
 
             if (player) {
-                const avatar = playersAvatars[player.name] || player.id;
-                this.room.setPlayerAvatar(player.id, `${avatar}`);
+                this.resetPlayerAvatar(player);
             }
         }
     }
@@ -600,8 +669,13 @@ class HaxBallController {
         };
     }
 
+    resetPlayerAvatar(player) {
+        const avatar = playersAvatars[player.name] || player.id;
+        this.room.setPlayerAvatar(player.id, `${avatar}`);
+    }
+
     resetTeamToInitPosition(teamId) {
-        const playerList = this.room.getPlayerList();
+        const playerList = this.getPlayers();
 
         for (let i = 0; i < playerList.length; i++) {
             const player = playerList[i];
@@ -619,6 +693,107 @@ class HaxBallController {
         }
     }
 
+    goToGameTab() {
+        try {
+            const roomLinkElement = this.getRoomLinkElement();
+            this.gamePageController = new GamePageController(roomLinkElement.href);
+        } catch (error) {
+            console.log(error);
+        }
+    }
+
+    getRoomLinkElement() {
+        return $(document.getElementsByTagName('iframe')[0].contentWindow.document.body).find('a')[1];
+    }
+
+    waitForRoomLinkElement(callback) {
+        const element = this.getRoomLinkElement();
+
+        if (element) {
+            callback();
+        } else {
+            setTimeout(() => {
+                this.waitForRoomLinkElement(callback);
+            }, 500);
+        }
+    };
+
+    addSaveReplayButton() {
+        if (document.getElementById(SAVE_REPLAY_BUTTON_ID)) {
+            return;
+        }
+
+        let button = document.createElement("button");
+        button.id = SAVE_REPLAY_BUTTON_ID;
+        button.innerHTML = "SAVE REPLAY";
+        button.onclick = this.saveMatchResult.bind(this);
+        button.style.color = '#fff';
+        button.style.height = '100px';
+        button.style.width = '450px';
+        button.style.position = 'fixed';
+        button.style.top = '300px';
+        button.style.left = '10px';
+        button.style.fontSize = '36px';
+        button.style.background = 'linear-gradient(#8da86b, #658d59)';
+        button.style.border = '4px solid white';
+        button.style.borderRadius = '50px';
+        button.style.cursor = 'pointer';
+
+        button = document.body.appendChild(button);
+    }
+
+    saveMatchResult() {
+        try {
+            if (this.matchResult) {
+                this.client.postMatchResult(this.matchResult, this.handlePostMatchResult.bind(this));
+            } else {
+                throw new Error('Match not found');
+            }
+        } catch (error) {
+            console.log(error);
+        }
+    }
+
+    setHostHandicap() {
+        this.gamePageController.sendMessage('/handicap ' + HOST_HANDICAP);
+    }
+
+}
+
+class GamePageController {
+
+    constructor(pageUrl) {
+        this.page = window.open(pageUrl);
+    }
+
+    getDocument() {
+        return this.page.document.getElementsByTagName('iframe')[0].contentWindow.document;
+    }
+
+    getInputBox() {
+        return this.getDocument().getElementsByClassName('input')[0];
+    }
+
+    getInput() {
+        return this.getInputBox().children[0];
+    }
+
+    getSendButton() {
+        return this.getInputBox().children[1];
+    }
+
+    sendMessage(message = '') {
+        const input = this.getInput();
+        const button = this.getSendButton();
+
+        input.value = message;
+        button.click();
+    }
+
+    showConfirmModal(message = '') {
+        return this.page.confirm(message);
+    }
+
 }
 
 class Client {
@@ -632,16 +807,14 @@ class Client {
         }
 
         $.get(url, function (data) {
-            const red = data.red.map(player => player.name);
-            const blue = data.blue.map(player => player.name);
-            callback(red, blue);
+            callback(data.red, data.blue);
         });
     }
 
     postMatchResult(matchResult, callback){
         $.ajax({
             type: "POST",
-            url: 'http://hax.opac.pl/calculatedMatch/new', // move this to const
+            url: BACKEND_BASE_URL + 'calculatedMatch/new', // move this to const
             dataType: 'application/json',
             data: matchResult,
             success: callback,
@@ -656,6 +829,7 @@ function init(){
         var haxBallController = new HaxBallController()
         .initRoom()
         .initListeners()
+        .initUserInterface()
         ;
 
         window.haxBallController = haxBallController;
